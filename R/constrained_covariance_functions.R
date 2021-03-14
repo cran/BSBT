@@ -58,7 +58,7 @@ constrained_covariance_function <- function(coordinates, type, hyperparameters,
 
   prior.mean                <- rep(0, dim(coordinates)[1])
   constrained.k             <- k - k%*%linear.combination%*%t(k%*%linear.combination)*as.numeric((1/(linear.combination%*%k%*%linear.combination)))
-  constrained.mean          <- prior.mean + as.numeric((0-t(prior.mean)%*%linear.combination)/(t(linear.combination)%*%k%*%linear.combination))*k%*%linear.combination
+  constrained.mean          <- prior.mean + as.numeric((linear.constraint-t(prior.mean)%*%linear.combination)/(t(linear.combination)%*%k%*%linear.combination))*k%*%linear.combination
   spectral.decomp           <- eigen(constrained.k)
   spectral.decomp$values[spectral.decomp$values < 0] <- 0 #Deal with precision errors in covariance matrix
   constrained.decomp        <- spectral.decomp$vectors%*%diag(sqrt(spectral.decomp$values))
@@ -71,11 +71,11 @@ constrained_covariance_function <- function(coordinates, type, hyperparameters,
 
 #' Construct a constrained covariance matrix from the adjacency matrix
 #'
-#' This function constructs a covariance function from the graph's adjacency matrix. The covariance function may be squared exponential, rational quadratic or Matern. It includes a constraint, where a linear combination of the parameters can be fixed.
+#' This function constructs a covariance function from the graph's adjacency matrix. The covariance function may be squared exponential, rational quadratic, Matern or the matrix exponential. It includes a constraint, where a linear combination of the parameters can be fixed.
 #'
 #'
 #' @param adj.matrix The graph adjacency matrix
-#' @param type The type of covariance function used. One of "sqexp", "ratquad" or "matern". Note: only matern with nu = 5/2 is supported.
+#' @param type The type of covariance function used. One of "sqexp", "ratquad", "matern" or "matrix". Note: only matern with nu = 5/2 is supported.
 #' @param hyperparameters A vector containing the covariance function hyperparameters. For the squared exponential and matern, the vector should contain the variance and length scale, for the rational quadratic, the vector should contain the variance, length scale and scaling parameters
 #' @param linear.combination A matrix which defines the linear combination of the parameter vector lambda = (lambda_1, ..., lambda_N)^T. The linear combination is a vector of coefficients such that linear.combination %*% lambda = linear.constraint.
 #' @param linear.constraint The value the linear constraint takes. Defaults to 0.
@@ -94,10 +94,12 @@ constrained_adjacency_covariance_function <- function(adj.matrix, type, hyperpar
                                                      linear.combination, linear.constraint = 0){
 
 
-  #Partition Plane using Voronoi diagram and create network from this. Use dijkstra's algorithm to
+  #Use dijkstra's algorithm to
   # compute shortest path between each node
+  if(type != "matrix"){
   object.network          <- igraph::graph.adjacency(adj.matrix, weighted=TRUE)
   shortest.path.matrix    <- igraph::shortest.paths(object.network, algorithm = "dijkstra")
+  }
 
 
 
@@ -107,8 +109,10 @@ constrained_adjacency_covariance_function <- function(adj.matrix, type, hyperpar
     stop("Insufficient hyperparameters. Rational Quadratic requires 3 values.")
   if(type == "matern" & length(hyperparameters) != 2)
     stop("Insufficient hyperparameters. Matern requires 2 values.")
+  if(type == "matrix" & length(hyperparameters) != 1)
+    stop("Insufficient hyperparameters. Matrix exponential requires 1 value.")
 
-  if(dim(shortest.path.matrix)[1] != length(linear.combination))
+  if(dim(adj.matrix)[1] != length(linear.combination))
     stop("Could not constrain distirbution. Linear constraint dimensions does not match number of objects.")
 
 
@@ -116,12 +120,14 @@ constrained_adjacency_covariance_function <- function(adj.matrix, type, hyperpar
   #Construct Covariance Matrix
   if(type == "sqexp"){
     k <- hyperparameters[1]^2*exp(-shortest.path.matrix^2/hyperparameters[2]^2)
-
   } else if(type == "ratquad"){
     k <- hyperparameters[1]^2*(1 + shortest.path.matrix^2/(2*(hyperparameters[2]^2)*hyperparameters[3]))^(-hyperparameters[3])
   } else if(type == "matern"){
     k <- (1 + sqrt(5)/hyperparameters[2]*shortest.path.matrix + 5/(3*hyperparameters[2]^2)*shortest.path.matrix^2)*exp(-sqrt(5)/hyperparameters[2]*shortest.path.matrix)
-  } else {
+  } else if(type == "matrix"){
+    k <- expm::expm(adj.matrix)
+    k <- hyperparameters[1]^2*diag(diag(k)^-0.5)%*%k%*%diag(diag(k)^-0.5)
+  }else {
     stop("Could not construct covariance matrix. Unrecognised covariance type.")
   }
 
@@ -130,9 +136,9 @@ constrained_adjacency_covariance_function <- function(adj.matrix, type, hyperpar
   if(length(linear.constraint) > 1)
     stop("Currently only scalar constraints are supported")
 
-  prior.mean                <- rep(0, dim(shortest.path.matrix)[1])
+  prior.mean                <- rep(0, dim(k)[1])
   constrained.k             <- k - k%*%linear.combination%*%t(k%*%linear.combination)*as.numeric((1/(linear.combination%*%k%*%linear.combination)))
-  constrained.mean          <- prior.mean + as.numeric((0-t(prior.mean)%*%linear.combination)/(t(linear.combination)%*%k%*%linear.combination))*k%*%linear.combination
+  constrained.mean          <- prior.mean + as.numeric((linear.constraint-t(prior.mean)%*%linear.combination)/(t(linear.combination)%*%k%*%linear.combination))*k%*%linear.combination
   spectral.decomp           <- eigen(constrained.k)
   spectral.decomp$values[spectral.decomp$values < 0] <- 0 #Deal with precision errors in covariance matrix
   constrained.decomp        <- spectral.decomp$vectors%*%diag(sqrt(spectral.decomp$values))
