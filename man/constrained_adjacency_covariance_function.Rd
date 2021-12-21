@@ -27,14 +27,18 @@ constrained_adjacency_covariance_function(
 The mean vector and covariance matrix
 }
 \description{
-This function constructs a covariance function from the graph's adjacency matrix. The covariance function may be squared exponential, rational quadratic, Matern or the matrix exponential. It includes a constraint, where a linear combination of the parameters can be fixed.
+This function constructs a covariance function from the graph's adjacency
+matrix. The covariance function may be squared exponential,
+rational quadratic, Matern or the matrix exponential.
+It includes a constraint, where a linear combination of the parameters
+can be fixed.
 }
 \examples{
 #Construct covariance matrix of Dar es Salaam, Tanzania, using network metric
 data(dar.adj.matrix, package = "BSBT") #load dar es salaam adjacency matrix
 k <- constrained_adjacency_covariance_function(dar.adj.matrix, type = "sqexp",
        hyperparameters = c(1, 1), rep(1, dim(dar.adj.matrix)[1]), 0)
-       #Covariance registetred by sum of subwards is 0 using rational quadratic function
+       #Covariance registered by sum of objects is 0 using rational quadratic function
 }
 \seealso{
 For more information about covariance functions see \url{https://www.cs.toronto.edu/~duvenaud/cookbook/} or \url{http://www.gaussianprocess.org/gpml/chapters/RW4.pdf}
